@@ -881,7 +881,8 @@ async def handle_portal(message):
     
     await bot.reply_to(message, "🔗 Portal URL အားစစ်ဆေးနေပါသည်...")
     
-    if await check_session_url_improved(session_url=url):
+    if "http" in url:
+
         user_data[message.chat.id]['session_url'] = url
         await bot.reply_to(
             message, 
