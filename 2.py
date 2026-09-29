@@ -1,4 +1,5 @@
 import telebot, asyncio, aiohttp, json, base64, random, re, os, string, time, uuid
+import urllib.request
 from telebot.async_telebot import AsyncTeleBot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiohttp import web
@@ -23,9 +24,35 @@ ADMIN_USERNAME = "@Vokavoka0"
 def is_admin(user_id):
     return str(user_id) in ADMINS
 
-PROXY_LIST = [
-    "w9nx03l4kl8vdf0:iwx3ijrwgcyil91@rp.scrapegw.com:6060",
+# ==================== PROXY AUTO FETCH ====================
+PROXY_URLS = [
+    "https://cdn.jsdelivr.net/gh/proxifly/free-proxy-list@main/proxies/all/data.txt",
+    "https://cdn.jsdelivr.net/gh/proxyscrape/free-proxy-list@main/proxies/all/data.txt",
+    "https://raw.githubusercontent.com/proxmint/free-proxy-list/main/proxies/http.txt",
 ]
+
+PROXY_LIST = []
+
+def load_proxies():
+    global PROXY_LIST
+    proxies = set()
+    for url in PROXY_URLS:
+        try:
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=10) as response:
+                content = response.read().decode('utf-8', errors='ignore')
+                for line in content.splitlines():
+                    line = line.strip()
+                    if line and not line.startswith('#'):
+                        if line.startswith("http://") or line.startswith("https://") or line.startswith("socks"):
+                            proxies.add(line)
+                        else:
+                            proxies.add(f"http://{line}")
+        except Exception as e:
+            print(f"Proxy download error ({url}): {e}")
+    
+    PROXY_LIST = list(proxies)
+    print(f"Total Proxies Loaded: {len(PROXY_LIST)}")
 
 _proxy_index = 0
 def get_next_proxy():
@@ -34,8 +61,9 @@ def get_next_proxy():
         return None
     proxy = PROXY_LIST[_proxy_index % len(PROXY_LIST)]
     _proxy_index += 1
-    return f"http://{proxy}"
+    return proxy
 
+# ==================== BOT SYSTEM INIT ====================
 SUCCESS_CODE = asyncio.Queue()
 bot = AsyncTeleBot(BOT_TOKEN)
 user_data = {}
@@ -816,7 +844,7 @@ def get_current_time():
     return datetime.now(timezone.utc)
 
 @bot.message_handler(commands=['recheck'])
-async def recheck(message):
+async def recheck_command(message):
     chat_id = message.chat.id
     user_id = str(chat_id)
     
@@ -882,7 +910,6 @@ async def handle_portal(message):
     await bot.reply_to(message, "🔗 Portal URL အားစစ်ဆေးနေပါသည်...")
     
     if "http" in url:
-
         user_data[message.chat.id]['session_url'] = url
         await bot.reply_to(
             message, 
@@ -1038,7 +1065,8 @@ async def status(message):
         f"⏱ Uptime: {hours}h {minutes}m {seconds}s\n"
         f"🔍 Active Scans: {active_scans}\n"
         f"✅ PAID Users: {approved_users}\n"
-        f"👥 Sessions Loaded: {len(user_data)}"
+        f"👥 Sessions Loaded: {len(user_data)}\n"
+        f"🌐 Proxies Loaded: {len(PROXY_LIST)}"
     )
 
 async def send_success_file(chat_id):
@@ -1353,10 +1381,9 @@ async def get_session_id(session, session_url, previous_session_id=None):
         'sec-fetch-site': 'same-origin',
         'upgrade-insecure-requests': '1',
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0',
-        'cookie': 'sensorsdata2015jssdkcross=%7B%22distinct_id%22%3A%2219e0ddbd9f2152-0df941f2efc6b08-4c657b58-1327104-19e0ddbd9f3a60%22%2C%22first_id%22%3A%22%22%2C%22props%22%3A%7B%22%24latest_traffic_source_type%22%3A%22%E8%87%AA%E7%84%B6%E6%90%9C%E7%B4%A2%E6%B5%81%E9%87%8F%22%2C%22%24latest_search_keyword%22%3A%22%E6%9C%AA%E5%8F%96%E5%88%B0%E5%80%BC%22%2C%22%24latest_referrer%22%3A%22https%3A%2F%2Fgemini.google.com%2F%22%7D%2C%22identities%22%3A%22eyIkaWRlbnRpdHlfY29va2llX2lkIjoiMTllMGRkYmQ5ZjIxNTItMGRmOTQxZjJlZmM2YjA4LTRjNjU3YjU4LTEzMjcxMDQtMTllMGRkYmQ5ZjNhNjAifQ%3D%3D%22%2C%22history_login_id%22%3A%7B%22name%22%3A%22%22%2C%22value%22%3A%22%22%7D%2C%22%24device_id%22%3A%2219e0ddbd9f2152-0df941f2efc6b08-4c657b58-1327104-19e0ddbd9f3a60%22%7D'
     }
     
-    proxy = None
+    proxy = get_next_proxy()
     
     try:
         async with session.get(session_url, headers=headers, allow_redirects=True, proxy=proxy) as req:
@@ -1437,7 +1464,7 @@ async def perform_check(session_url, code, chat_id, scan_id=None, recheck=False,
                 "user-agent": "Mozilla/5.0 (Linux; Android 12; K) AppleWebKit/537.36 (KHTML, like Geo) Chrome/139.0.0.0 Mobile Safari/537.36",
             }
             
-            proxy = None
+            proxy = get_next_proxy()
             
             try:
                 async with task_session.post(post_url, json=data, headers=headers, proxy=proxy) as req:
@@ -1622,7 +1649,7 @@ async def Captcha_Image(session, session_id):
         '_t': str(time.time()),
     }
     
-    proxy = None
+    proxy = get_next_proxy()
     
     async with session.get('https://portal-as.ruijienetworks.com/api/auth/captcha/image', params=params, headers=headers, proxy=proxy) as req:
         return await req.read()
@@ -1648,7 +1675,7 @@ async def Varify_Captcha(session, session_id, text):
         'authCode': text,
     }
     
-    proxy = None
+    proxy = get_next_proxy()
     
     async with session.post('https://portal-as.ruijienetworks.com/api/auth/captcha/verify', headers=headers, json=json_data, proxy=proxy) as req:
         data = await req.json()
@@ -1674,6 +1701,10 @@ async def start_polling():
 
 async def main():
     global session, _connector
+    
+    # Server မစတင်မီ Free Proxy များကို အလိုအလျောက် Download ဆွဲယူမည်
+    load_proxies()
+    
     timeout = aiohttp.ClientTimeout(total=30)
     _connector = aiohttp.TCPConnector(
         limit=20000,
