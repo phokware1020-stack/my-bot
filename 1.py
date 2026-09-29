@@ -43,7 +43,8 @@ async def limit_speed():
 # ════════════════════════════════════════════════════════════════
 #  GLOBAL STATE
 # ════════════════════════════════════════════════════════════════
-bot = AsyncTeleBot(os.environ["7714866500"])
+bot = AsyncTeleBot(BOT_TOKEN)
+
 user_data = {}
 scan_tasks = {}
 success_texts = {}
