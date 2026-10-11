@@ -2,5 +2,4 @@ pytelegrambotapi
 aiohttp==3.10.11
 opencv-python-headless
 ddddocr
-python-3.9.18
 
